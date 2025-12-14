@@ -1,3 +1,11 @@
+Module RocqTokenTest.
+
+Inductive nat : Type :=
+| O : nat
+| S : nat -> nat.
+
+Inductive mumble : Type := Grumble | Bumble | Boop.
+Inductive color : Set := red | yellow | blue.
 
 Definition plus (n m : nat) : nat :=
   match n with
@@ -19,3 +27,5 @@ Proof.
   intros n.
   reflexivity.
 Qed.
+
+End RocqTokenTest.
