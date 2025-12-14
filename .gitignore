@@ -1,0 +1,26 @@
+# Dune build directory
+_build/
+
+# Compiled OCaml files
+*.cmi
+*.cmo
+*.cmx
+*.cma
+*.cmxa
+*.cmxs
+*.a
+*.o
+
+# Editor backups
+*~
+\#*\#
+.#*
+
+# Merlin (OCaml IDE support)
+.merlin
+
+# Local binaries (from manual compilation)
+lexer
+
+# OS files
+.DS_Store
