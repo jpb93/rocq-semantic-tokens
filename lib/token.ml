@@ -47,7 +47,7 @@ type semantic_kind =
 type semantic_token = {
   pos : int;
   len : int;
-  kind : semantic_kind;
+  sem_kind : semantic_kind;
 }
 
 let token_kind_to_string = function
@@ -108,3 +108,10 @@ let token_kind_to_string = function
   | UNDERSCORE -> "UNDERSCORE"
   | COMMENT -> "COMMENT"
   | EOF -> "EOF"
+  
+let semantic_kind_to_string = function
+  | Type -> "Type"
+  | Constructor -> "Constructor"
+  | Function -> "Function"
+  | Module -> "Module"
+  | Variable -> "Variable"

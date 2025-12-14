@@ -1,6 +1,3 @@
-Inductive nat : Type :=
-  | O : nat
-  | S : nat -> nat.
 
 Definition plus (n m : nat) : nat :=
   match n with
