@@ -30,6 +30,15 @@ let structure_keywords = [
   "Require"; "Import"; "Export"; "Open"; "Scope"
 ]
 
+let function_definining_keywords =
+  assertion_keywords
+  @ assertion_keywords
+  @ ["Fixpoint"; "Instance"]
+
+let type_defining_keywords = 
+  ["Inductive"; "CoInductive"; "Record"; "Structure"; "Class"]
+
+
 let keywords = reserved_keywords 
   @ assertion_keywords 
   @ assumption_keywords

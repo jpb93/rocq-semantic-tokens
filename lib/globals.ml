@@ -1,4 +1,5 @@
 open Token
+open Keywords
 
 let collect_globals (tokens : token list) =
   let table = Hashtbl.create 64 in
@@ -9,15 +10,12 @@ let collect_globals (tokens : token list) =
     | [] -> table
     
     | { kind = KEYWORD k; _ } :: { kind = IDENT name; _ } :: rest
-      when List.mem k ["Definition"; "Fixpoint"; "Theorem"; "Lemma"; 
-                       "Remark"; "Fact"; "Corollary"; "Proposition"; 
-                       "Example"; "Axiom"; "Conjecture"; "Parameter";
-                       "Variable"; "Hypothesis"; "Instance"] ->
+      when List.mem k function_definining_keywords ->
         add name Function;
         loop rest
     
     | { kind = KEYWORD k; _ } :: { kind = IDENT name; _ } :: rest
-      when List.mem k ["Inductive"; "CoInductive"; "Record"; "Structure"; "Class"] ->
+      when List.mem k type_defining_keywords ->
         add name Type;
         loop (scan_constructors rest)
     
