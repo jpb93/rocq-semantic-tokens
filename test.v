@@ -5,7 +5,11 @@ Inductive nat : Type :=
 | S : nat -> nat.
 
 Inductive mumble : Type := Grumble | Bumble | Boop.
+
 Inductive color : Set := red | yellow | blue.
+
+Inductive wrapper :=
+  | Wrap : (nat -> nat) -> wrapper.
 
 Definition plus (n m : nat) : nat :=
   match n with

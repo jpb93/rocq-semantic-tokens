@@ -39,7 +39,7 @@ type token = {
   
 type semantic_kind =
   | Type
-  | Constructor
+  | Constructor of Type_expr.t list
   | Function
   | Module
   | Variable
@@ -111,7 +111,11 @@ let token_kind_to_string = function
   
 let semantic_kind_to_string = function
   | Type -> "Type"
-  | Constructor -> "Constructor"
+  | Constructor params -> 
+      let params_str = 
+        List.map Type_expr.type_expr_to_string params 
+        |> String.concat ", " in
+      "Constructor(" ^ params_str ^ ")"
   | Function -> "Function"
   | Module -> "Module"
   | Variable -> "Variable"

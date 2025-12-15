@@ -25,16 +25,32 @@ let collect_globals (tokens : token list) =
     
     | _ :: rest -> loop rest
   
-  and scan_constructors = function
+    and scan_constructors = function
     | [] -> []
     | { kind = DOT; _ } :: rest -> rest
     
+    (* name : type_expr *)
+    | { kind = PIPE; _ } :: { kind = IDENT name; _ } :: { kind = COLON; _ } :: rest ->
+        let (type_expr, rest2) = Type_parser.parse_type_expr rest in
+        let (params, _return) = Type_expr.extract_params type_expr in
+        add name (Constructor params);
+        scan_constructors rest2
+    
+    (* nullary, no type annotation *)
     | { kind = PIPE; _ } :: { kind = IDENT name; _ } :: rest ->
-        add name Constructor;
+        add name (Constructor []);
         scan_constructors rest
     
+    (* the first constructor after :=, with type *)
+    | { kind = COLONEQUAL; _ } :: { kind = IDENT name; _ } :: { kind = COLON; _ } :: rest ->
+        let (type_expr, rest2) = Type_parser.parse_type_expr rest in
+        let (params, _return) = Type_expr.extract_params type_expr in
+        add name (Constructor params);
+        scan_constructors rest2
+    
+    (* the first constructor after :=, nullary *)
     | { kind = COLONEQUAL; _ } :: { kind = IDENT name; _ } :: rest ->
-        add name Constructor;
+        add name (Constructor []);
         scan_constructors rest
         
     | _ :: rest -> scan_constructors rest

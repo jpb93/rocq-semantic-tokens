@@ -1,3 +1,5 @@
+FILE ?= test.v
+
 .PHONY: build test clean run
 
 build:
@@ -13,7 +15,7 @@ clean:
 	rm -f lib/*.cmi lib/*.cmx lib/*.o
 
 run:
-	dune exec coq_tokens -- test.v
+	dune exec coq_tokens -- $(FILE)
 
 # Install to your system (optional)
 install:
