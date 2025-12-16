@@ -4,10 +4,10 @@ open Coq_tokens
   let text = String.sub source tok.byte_offset tok.len in
   Printf.printf "%d %s \"%s\"\n" tok.byte_offset (Token.token_kind_to_string tok.kind) text*)
 
-let print_globals globals =
+(*let print_globals globals =
   Hashtbl.iter (fun name kind ->
     Printf.printf "%s -> %s\n" name (Token.semantic_kind_to_string kind)
-  ) globals
+  ) globals *)
 
 let () =
   if Array.length Sys.argv < 2 then begin
@@ -21,4 +21,12 @@ let () =
   close_in ic;
   let tokens = Lexer.lex source in
   let globals = Globals.collect_globals tokens in
-  print_globals globals
+  let sem_tokens = Scope.analyze ~globals tokens in
+  List.iter (fun (tok : Token.semantic_token) ->
+    let text = String.sub source tok.pos tok.len in
+    Printf.printf "%d:%d %s \"%s\"\n" 
+      tok.pos 
+      tok.len 
+      (Token.semantic_kind_to_string tok.sem_kind) 
+      text
+  ) sem_tokens

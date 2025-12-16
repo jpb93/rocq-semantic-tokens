@@ -31,7 +31,7 @@ let structure_keywords = [
 ]
 
 let function_definining_keywords =
-  assertion_keywords
+  assumption_keywords
   @ assertion_keywords
   @ ["Fixpoint"; "Instance"]
 
