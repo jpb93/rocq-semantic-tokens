@@ -22,13 +22,19 @@ let rec parse_type_expr (tokens : token list) : Type_expr.t * token list =
       parse_app_rest (App (acc, next)) rest
     | _ -> (acc, tokens)
     
+
+  (* In type_parser.ml, update parse_atom: *)
   and parse_atom (tokens : token list) : Type_expr.t * token list =
     match tokens with
     | { kind = IDENT s; _ } :: rest -> (Ident s, rest)
+    | { kind = KEYWORD s; _ } :: rest when List.mem s ["Type"; "Prop"; "Set"] -> 
+        (Ident s, rest)
     | { kind = LPAREN; _ } :: rest -> 
-      let (inner, rest2) = parse_type_expr rest in
-      (match rest2 with
-      | { kind = RPAREN; _ } :: rest3 -> (inner, rest3)
-      | _ -> failwith "Expected closing paren")
-    | _ -> failwith "Expected identifier or '('"
-
+        let (inner, rest2) = parse_type_expr rest in
+        (match rest2 with
+         | { kind = RPAREN; _ } :: rest3 -> (inner, rest3)
+         | _ -> failwith "Expected closing paren")
+    | t :: _ -> 
+        failwith (Printf.sprintf "Expected identifier or '(' but got %s at position %d" 
+          (Token.token_kind_to_string t.kind) t.byte_offset)
+    | [] -> failwith "Expected identifier or '(' but got end of tokens"

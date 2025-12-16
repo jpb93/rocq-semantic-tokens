@@ -1,2 +1,3 @@
 (library
- (name coq_tokens))
+ (name coq_tokens)
+ (libraries unix))
