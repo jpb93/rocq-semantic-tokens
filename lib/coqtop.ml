@@ -129,7 +129,6 @@ let start () : t =
 
   (* Warm-up without desync: if a stale prompt is already available, the first read can be empty;
      consume until we actually get the Locate output. *)
-  send_command t "Locate nat.";
   ignore (read_nonempty_until_prompt t);
 
   t
