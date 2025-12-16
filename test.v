@@ -1,8 +1,10 @@
 Module RocqTokenTest.
 
-Inductive nat : Type :=
-| O : nat
-| S : nat -> nat.
+(***************************)
+(* Inductive nat : Type := *)
+(* | O : nat               *)
+(* | S : nat -> nat.       *)
+(***************************)
 
 Inductive mumble : Type := Grumble | Bumble | Boop.
 
@@ -30,6 +32,16 @@ Lemma plus_O_n : forall n, plus O n = n.
 Proof.
   intros n.
   reflexivity.
+Qed.
+
+Lemma plus_n_O : forall n, plus n O = n.
+Proof.
+  intros n.
+  induction n.
+  - reflexivity.
+  - simpl.
+    rewrite IHn.
+    reflexivity.
 Qed.
 
 End RocqTokenTest.

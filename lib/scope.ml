@@ -32,17 +32,38 @@ let find_local (name : string) (stack : scope_stack) : semantic_kind option =
       | None -> search rest
   in
   search stack
-  
-type output = semantic_token list
+
+type output = {
+  tokens : semantic_token list;
+  unknowns : string list;
+}
 
 let analyze ~(globals: (string, semantic_kind) Hashtbl.t) (tokens : token list) : output =
   
   let results = ref [] in
+  let unknowns_ref = ref [] in
   let emit tok = results := tok :: !results in
   
   let emit_token (t : token) (kind : semantic_kind) =
     emit { pos = t.byte_offset; len = t.len; sem_kind = kind}
   in
+  
+  let bind_multi_params stack tokens =
+    let rec collect_idents acc = function
+      | { Token.kind = COLON; _ } :: rest -> (List.rev acc, rest)
+      | ({ Token.kind = IDENT _; _ } as t) :: rest -> collect_idents (t :: acc) rest
+      | rest -> (List.rev acc, rest)
+    in
+    let (ident_tokens, after_colon) = collect_idents [] tokens in
+    let (type_expr, rest') = Type_parser.parse_type_expr after_colon in
+    let kind = if Type_expr.is_function_type type_expr then Function else Variable in
+    let stack' = List.fold_left (fun stk t ->
+      let name = match t.Token.kind with Token.IDENT n -> n | _ -> "" in
+      emit_token t kind;
+      add_binding name kind stk
+    ) stack ident_tokens in
+    (stack', rest')
+  in  
   
   let rec bind_pattern_vars param_types stack tokens =
     match tokens, param_types with
@@ -85,16 +106,27 @@ let analyze ~(globals: (string, semantic_kind) Hashtbl.t) (tokens : token list) 
     
     (* Module *)
     | { Token.kind = KEYWORD "Module"; _ } :: ({ Token.kind = IDENT _name; _ } as t) :: rest ->
-        emit_token t Module;
-        loop stack rest
+      emit_token t Module;
+      loop stack rest
     
-    (* Parameter binding: (name : type) *)
+    (* Parameter binding: (name ... : type) - handles (x : T) and (x y : T) *)
+    (* Parameter binding: (name ... : type) *)
     | { Token.kind = LPAREN; _ } 
-      :: ({ Token.kind = IDENT name; _ } as t) 
-      :: { Token.kind = COLON; _ } 
-      :: rest ->
-        emit_token t Variable;
-        loop (add_binding name Variable stack) rest
+      :: ({ Token.kind = IDENT _; _ } 
+      :: rest_after_first_ident as rest) ->
+        (* Check if this looks like a parameter binding by scanning for colon *)
+        let rec has_colon_before_paren = function
+          | [] -> false
+          | { Token.kind = COLON; _ } :: _ -> true
+          | { Token.kind = RPAREN; _ } :: _ -> false
+          | { Token.kind = IDENT _; _ } :: rest -> has_colon_before_paren rest
+          | _ :: _ -> false
+        in
+        if has_colon_before_paren rest_after_first_ident then
+          let (stack', rest') = bind_multi_params stack rest in
+          loop stack' rest'
+        else
+          loop stack rest  (* Just skip non-parameter parens *)
     
     (* End of definition *)
     | { Token.kind = DOT; _ } :: rest ->
@@ -104,12 +136,9 @@ let analyze ~(globals: (string, semantic_kind) Hashtbl.t) (tokens : token list) 
           loop (close_scope stack) rest
           
     (* Implicit parameter binding: {name : type} *)
-    | { Token.kind = LBRACE; _ } 
-      :: ({ Token.kind = IDENT name; _ } as t) 
-      :: { Token.kind = COLON; _ } 
-      :: rest ->
-        emit_token t Variable;
-        loop (add_binding name Variable stack) rest
+    | { Token.kind = LBRACE; _ } :: ({ Token.kind = IDENT _; _ } :: _ as rest) ->
+      let (stack', rest') = bind_multi_params stack rest in
+      loop stack' rest'
         
     (* Match start *)
     | { Token.kind = KEYWORD "match"; _} :: rest ->
@@ -127,6 +156,9 @@ let analyze ~(globals: (string, semantic_kind) Hashtbl.t) (tokens : token list) 
             emit_token t kind;
             loop stack rest
         | None ->
+            (* If a constructor only appears in patterns, we still want to query coqtop for it. *)
+            if not (List.mem cname !unknowns_ref) then
+              unknowns_ref := cname :: !unknowns_ref;
             loop stack rest)
             
     (* Wildcard *)
@@ -162,7 +194,7 @@ let analyze ~(globals: (string, semantic_kind) Hashtbl.t) (tokens : token list) 
         emit_token t Variable;
         loop (add_binding name Variable stack) rest
         
-        (* forall binding: forall x, ... *)
+    (* forall binding: forall x, ... *)
     | { Token.kind = KEYWORD "forall"; _ } 
       :: ({ Token.kind = IDENT name; _ } as t) 
       :: { Token.kind = COMMA; _ } :: rest ->
@@ -170,20 +202,20 @@ let analyze ~(globals: (string, semantic_kind) Hashtbl.t) (tokens : token list) 
         emit_token t Variable;
         loop (add_binding name Variable stack) rest
         
-    (* Any identifier: look up in scope, then globals *)
+    (* Any identifier: look up in scope, then globals, or mark unknown *)
     | ({ Token.kind = IDENT name; _ } as t) :: rest ->
         (match find_local name stack with
          | Some kind -> emit_token t kind
          | None ->
-             match Hashtbl.find_opt globals name with
+           match Hashtbl.find_opt globals name with
              | Some kind -> emit_token t kind
-             | None -> ());
+             | None -> 
+               if not (List.mem name !unknowns_ref) then
+                 unknowns_ref := name :: !unknowns_ref);
         loop stack rest
     | _ :: rest -> loop stack rest
-    
     
   in
   
   loop empty_stack tokens;
-  List.rev !results
-
+  { tokens = List.rev !results; unknowns = List.rev !unknowns_ref }

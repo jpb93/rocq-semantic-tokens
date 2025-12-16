@@ -43,6 +43,7 @@ type semantic_kind =
   | Function
   | Module
   | Variable
+  | Ltac
   
 type semantic_token = {
   pos : int;
@@ -119,3 +120,4 @@ let semantic_kind_to_string = function
   | Function -> "Function"
   | Module -> "Module"
   | Variable -> "Variable"
+  | Ltac -> "Ltac"
