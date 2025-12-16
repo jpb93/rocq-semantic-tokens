@@ -89,7 +89,10 @@ let analyze ~(globals: (string, semantic_kind) Hashtbl.t) (tokens : token list) 
         loop stack rest
     
     (* Parameter binding: (name : type) *)
-    | { Token.kind = LPAREN; _ } :: ({ Token.kind = IDENT name; _ } as t) :: { Token.kind = COLON; _ } :: rest ->
+    | { Token.kind = LPAREN; _ } 
+      :: ({ Token.kind = IDENT name; _ } as t) 
+      :: { Token.kind = COLON; _ } 
+      :: rest ->
         emit_token t Variable;
         loop (add_binding name Variable stack) rest
     
@@ -100,6 +103,14 @@ let analyze ~(globals: (string, semantic_kind) Hashtbl.t) (tokens : token list) 
         else
           loop (close_scope stack) rest
           
+    (* Implicit parameter binding: {name : type} *)
+    | { Token.kind = LBRACE; _ } 
+      :: ({ Token.kind = IDENT name; _ } as t) 
+      :: { Token.kind = COLON; _ } 
+      :: rest ->
+        emit_token t Variable;
+        loop (add_binding name Variable stack) rest
+        
     (* Match start *)
     | { Token.kind = KEYWORD "match"; _} :: rest ->
       loop (open_scope stack) rest
@@ -128,13 +139,37 @@ let analyze ~(globals: (string, semantic_kind) Hashtbl.t) (tokens : token list) 
     | { Token.kind = KEYWORD "end"; _ } :: rest ->
       loop (close_scope stack) rest
       
+    (* let binding to a function: let f := fun ... *)
+    | { Token.kind = KEYWORD "let"; _ } 
+      :: ({ Token.kind = IDENT name; _ } as t) 
+      :: { Token.kind = COLONEQUAL; _ } 
+      :: ({ Token.kind = KEYWORD "fun"; _ } :: _ as rest) ->
+        emit_token t Function;
+        loop (add_binding name Function stack) rest
+        
     (* let binding: let x := ... in ... *)
     | { Token.kind = KEYWORD "let"; _ } 
       :: ({ Token.kind = IDENT name; _ } as t) 
-      :: { Token.kind = COLONEQUAL; _ } :: rest ->
+      :: { Token.kind = COLONEQUAL; _ } 
+      :: rest ->
         emit_token t Variable;
         loop (add_binding name Variable stack) rest
-    
+        
+    | { Token.kind = KEYWORD "fun"; _ } 
+      :: ({ Token.kind = IDENT name; _ } as t) 
+      :: { Token.kind = FATARROW; _ } 
+      :: rest ->
+        emit_token t Variable;
+        loop (add_binding name Variable stack) rest
+        
+        (* forall binding: forall x, ... *)
+    | { Token.kind = KEYWORD "forall"; _ } 
+      :: ({ Token.kind = IDENT name; _ } as t) 
+      :: { Token.kind = COMMA; _ } :: rest ->
+        
+        emit_token t Variable;
+        loop (add_binding name Variable stack) rest
+        
     (* Any identifier: look up in scope, then globals *)
     | ({ Token.kind = IDENT name; _ } as t) :: rest ->
         (match find_local name stack with
@@ -145,6 +180,8 @@ let analyze ~(globals: (string, semantic_kind) Hashtbl.t) (tokens : token list) 
              | None -> ());
         loop stack rest
     | _ :: rest -> loop stack rest
+    
+    
   in
   
   loop empty_stack tokens;
