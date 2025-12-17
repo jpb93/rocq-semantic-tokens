@@ -48,9 +48,10 @@ let analyze ~(globals: (string, semantic_kind) Hashtbl.t) (tokens : token list) 
     emit { pos = t.byte_offset; len = t.len; sem_kind = kind}
   in
   
-  (* Emit Type tokens for identifiers in a type expression.
-     Walks tokens from `start` until we reach `stop` (by byte_offset). *)
-  let emit_type_expr_tokens start stop =
+  (* Emit tokens for identifiers in a type expression.
+     If an identifier is bound in scope, emit with its bound kind.
+     Otherwise emit as Type (it's a type name like nat, list, etc.) *)
+  let emit_type_expr_tokens stack start stop =
     let stop_pos = match stop with
       | t :: _ -> t.Token.byte_offset
       | [] -> max_int
@@ -58,8 +59,11 @@ let analyze ~(globals: (string, semantic_kind) Hashtbl.t) (tokens : token list) 
     let rec emit = function
       | [] -> ()
       | t :: _ when t.Token.byte_offset >= stop_pos -> ()
-      | { Token.kind = IDENT _; _ } as t :: rest ->
-          emit_token t Type;
+      | { Token.kind = IDENT name; _ } as t :: rest ->
+          (* Check if this identifier is bound locally (e.g., type parameter) *)
+          (match find_local name stack with
+           | Some kind -> emit_token t kind  (* Use bound kind - likely Variable for type params *)
+           | None -> emit_token t Type);     (* Not bound - it's a type name *)
           emit rest
       | { Token.kind = KEYWORD s; _ } as t :: rest 
         when List.mem s ["Type"; "Prop"; "Set"] ->
@@ -79,15 +83,16 @@ let analyze ~(globals: (string, semantic_kind) Hashtbl.t) (tokens : token list) 
     let (ident_tokens, after_colon) = collect_idents [] tokens in
     let (type_expr, rest') = Type_parser.parse_type_expr after_colon in
     
-    (* Emit type tokens for identifiers in the type annotation *)
-    emit_type_expr_tokens after_colon rest';
-    
     let kind = if Type_expr.is_function_type type_expr then Function else Variable in
+    (* Emit variable tokens first (they appear first in source) *)
     let stack' = List.fold_left (fun stk t ->
       let name = match t.Token.kind with Token.IDENT n -> n | _ -> "" in
       emit_token t kind;
       add_binding name kind stk
     ) stack ident_tokens in
+    (* Then emit type tokens for identifiers in the type annotation *)
+    (* Pass stack' so type parameters (A, B, etc.) are recognized as bound variables *)
+    emit_type_expr_tokens stack' after_colon rest';
     (stack', rest')
   in  
   
