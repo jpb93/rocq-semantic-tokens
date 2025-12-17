@@ -19,10 +19,19 @@ Definition plus (n m : nat) : nat :=
   | S p => S (plus p m)
   end.
 
+Definition next (n : nat) : nat := S n.
+
 Fixpoint mult (n m : nat) : nat :=
   match n with
   | O => O
   | S p => plus m (mult p m)
+  end.
+
+Fixpoint fib (n : nat) : nat :=
+  match n with
+  | O => O
+  | S O => S O
+  | S (S n' as m) => plus (fib m) (fib n')
   end.
 
 (* IGNORE COMMENTS *)

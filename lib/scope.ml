@@ -48,6 +48,28 @@ let analyze ~(globals: (string, semantic_kind) Hashtbl.t) (tokens : token list) 
     emit { pos = t.byte_offset; len = t.len; sem_kind = kind}
   in
   
+  (* Emit Type tokens for identifiers in a type expression.
+     Walks tokens from `start` until we reach `stop` (by byte_offset). *)
+  let emit_type_expr_tokens start stop =
+    let stop_pos = match stop with
+      | t :: _ -> t.Token.byte_offset
+      | [] -> max_int
+    in
+    let rec emit = function
+      | [] -> ()
+      | t :: _ when t.Token.byte_offset >= stop_pos -> ()
+      | { Token.kind = IDENT _; _ } as t :: rest ->
+          emit_token t Type;
+          emit rest
+      | { Token.kind = KEYWORD s; _ } as t :: rest 
+        when List.mem s ["Type"; "Prop"; "Set"] ->
+          emit_token t Type;
+          emit rest
+      | _ :: rest -> emit rest
+    in
+    emit start
+  in
+  
   let bind_multi_params stack tokens =
     let rec collect_idents acc = function
       | { Token.kind = COLON; _ } :: rest -> (List.rev acc, rest)
@@ -56,6 +78,10 @@ let analyze ~(globals: (string, semantic_kind) Hashtbl.t) (tokens : token list) 
     in
     let (ident_tokens, after_colon) = collect_idents [] tokens in
     let (type_expr, rest') = Type_parser.parse_type_expr after_colon in
+    
+    (* Emit type tokens for identifiers in the type annotation *)
+    emit_type_expr_tokens after_colon rest';
+    
     let kind = if Type_expr.is_function_type type_expr then Function else Variable in
     let stack' = List.fold_left (fun stk t ->
       let name = match t.Token.kind with Token.IDENT n -> n | _ -> "" in
