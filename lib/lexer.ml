@@ -172,6 +172,20 @@ let lex source =
           let (end_pos, s) = scan is_digit pos in
           loop end_pos (make_token (NUMBER s) pos (end_pos - pos) :: acc)
 
+      (* Strings *)
+      | '"' ->
+          let rec scan_string p =
+            if is_at_end p then
+              failwith "Unexpected end of file in string"
+            else match source.[p] with
+              | '"' -> p + 1  (* end of string, include closing quote *)
+              | '\\' when not (is_at_end (p + 1)) -> scan_string (p + 2)  (* escape sequence *)
+              | _ -> scan_string (p + 1)
+          in
+          let end_pos = scan_string (pos + 1) in
+          let s = String.sub source (pos + 1) (end_pos - pos - 2) in  (* content without quotes *)
+          loop end_pos (make_token (STRING s) pos (end_pos - pos) :: acc)
+
       (* Identifiers and keywords *)
       | c when is_ident_start c ->
           let (end_pos, s) = scan is_ident_char pos in

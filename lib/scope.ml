@@ -167,36 +167,53 @@ let analyze ~(globals: (string, semantic_kind) Hashtbl.t) (tokens : token list) 
           loop (close_scope stack) rest
           
     (* Implicit parameter binding: {name : type} *)
-    | { Token.kind = LBRACE; _ } :: ({ Token.kind = IDENT _; _ } :: _ as rest) ->
-      let (stack', rest') = bind_multi_params stack rest in
-      loop stack' rest'
+    | { Token.kind = LBRACE; _ } :: ({ Token.kind = IDENT _; _ } :: rest_after_ident as rest) ->
+      let rec has_colon_immediately = function
+        | { Token.kind = COLON; _ } :: _ -> true
+        | { Token.kind = IDENT _; _ } :: rest -> has_colon_immediately rest
+        | _ -> false
+      in
+      if has_colon_immediately rest_after_ident then
+        let (stack', rest') = bind_multi_params stack rest in
+        loop stack' rest'
+      else
+        loop stack rest
         
     (* Match start *)
     | { Token.kind = KEYWORD "match"; _} :: rest ->
       loop (open_scope stack) rest
       
     | { Token.kind = PIPE; _} :: ({ Token.kind = IDENT cname; _} as t) :: rest ->
-      let stack = close_scope stack in
-      let stack = open_scope stack in
-      (match Hashtbl.find_opt globals cname with
-        | Some (Constructor params) ->
-            emit_token t (Constructor params);
-            let (stack', rest') = bind_pattern_vars params stack rest in
-            loop stack' rest'
-        | Some kind -> 
-            emit_token t kind;
-            loop stack rest
-        | None ->
-            (* If a constructor only appears in patterns, we still want to query coqtop for it. *)
-            if not (List.mem cname !unknowns_ref) then
-              unknowns_ref := cname :: !unknowns_ref;
-            loop stack rest)
+      if stack = empty_stack then
+        (* Not in a match context, skip this pipe (e.g., intro patterns) *)
+        loop stack rest
+      else begin
+        let stack = close_scope stack in
+        let stack = open_scope stack in
+        (match Hashtbl.find_opt globals cname with
+          | Some (Constructor params) ->
+              emit_token t (Constructor params);
+              let (stack', rest') = bind_pattern_vars params stack rest in
+              loop stack' rest'
+          | Some kind -> 
+              emit_token t kind;
+              loop stack rest
+          | None ->
+              (* If a constructor only appears in patterns, we still want to query coqtop for it. *)
+              if not (List.mem cname !unknowns_ref) then
+                unknowns_ref := cname :: !unknowns_ref;
+              loop stack rest)
+        end
             
     (* Wildcard *)
     | { Token.kind = PIPE; _ } :: { Token.kind = UNDERSCORE; _ } :: rest ->
-      let stack = close_scope stack in
-      let stack = open_scope stack in
-      loop stack rest      
+      if stack = empty_stack then
+        loop stack rest
+      else begin
+        let stack = close_scope stack in
+        let stack = open_scope stack in
+        loop stack rest      
+      end
       
     (* Match end *)
     | { Token.kind = KEYWORD "end"; _ } :: rest ->
