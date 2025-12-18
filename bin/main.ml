@@ -48,18 +48,18 @@ let print_json source tokens =
 
 let () =
   let json_mode = ref false in
-  let query_coqtop_flag = ref false in
+  let query_flag = ref false in
   let filename = ref "" in
   
   let args = Array.to_list Sys.argv |> List.tl in
   List.iter (fun arg ->
     if arg = "--json" then json_mode := true
-    else if arg = "--query-coqtop" then query_coqtop_flag := true
+    else if arg = "--query" || arg = "--query-coqtop" then query_flag := true
     else filename := arg
   ) args;
   
   if !filename = "" then begin
-    Printf.eprintf "Usage: %s [--json] [--query-coqtop] <file.v>\n" Sys.argv.(0);
+    Printf.eprintf "Usage: %s [--json] [--query] <file.v>\n" Sys.argv.(0);
     exit 1
   end;
   
@@ -72,9 +72,9 @@ let () =
   let globals = Globals.collect_globals tokens in
   let result = Scope.analyze ~globals tokens in
   
-  (* If --query-coqtop, resolve unknowns *)
+  (* If --query, resolve unknowns using proof-query (batched) *)
   let all_tokens =
-    if !query_coqtop_flag && List.length result.unknowns > 0 then begin
+    if !query_flag && List.length result.unknowns > 0 then begin
       (* Filter to only query things likely to be global *)
       let queryable_unknowns = List.filter (fun name ->
         String.length name > 1 || 
@@ -84,24 +84,18 @@ let () =
       if List.length queryable_unknowns = 0 then
         result.tokens
       else begin
-        let coq = Coqtop.start () in
-        let resolved = List.filter_map (fun ident ->
-          match Coqtop.locate coq ident with
-          | Some kind -> Some (ident, kind)
-          | None -> None
-        ) queryable_unknowns in  (* Changed from result.unknowns *)
-        Coqtop.close coq;
+        (* Batch query all unknowns at once *)
+        let resolved = Coqtop.locate_batch queryable_unknowns in
         
-        
-        (* IMPORTANT: do NOT substring-scan the raw source (breaks on 1-letter idents like S/O).
-           Instead, enrich globals and re-run analysis so positions come from the lexer. *)
-        List.iter (fun (name, kind) ->
-          if not (Hashtbl.mem globals name) then Hashtbl.add globals name kind
+        (* Enrich globals with resolved symbols *)
+        Hashtbl.iter (fun name kind ->
+          if not (Hashtbl.mem globals name) then 
+            Hashtbl.add globals name kind
         ) resolved;
 
+        (* Re-run analysis with enriched globals *)
         let result2 = Scope.analyze ~globals tokens in
         result2.tokens
-        
       end
     end else
       result.tokens

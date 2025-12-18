@@ -96,25 +96,49 @@ let analyze ~(globals: (string, semantic_kind) Hashtbl.t) (tokens : token list) 
     (stack', rest')
   in  
   
-  let rec bind_pattern_vars param_types stack tokens =
+  let rec bind_pattern_vars ~globals param_types stack tokens =
     match tokens, param_types with
     | [], _ -> (stack, [])
     | { Token.kind = FATARROW; _ } :: _, _ -> (stack, tokens)
     
     | { Token.kind = UNDERSCORE; _ } :: rest, _ :: ptypes ->
-        bind_pattern_vars ptypes stack rest
+        bind_pattern_vars ~globals ptypes stack rest
         
     | { Token.kind = UNDERSCORE; _ } :: rest, [] ->
-        bind_pattern_vars [] stack rest
+        bind_pattern_vars ~globals [] stack rest
     
     | ({ Token.kind = IDENT name; _ } as t) :: rest, ptype :: ptypes ->
-        let kind = if Type_expr.is_function_type ptype then Function else Variable in
-        emit_token t kind;
-        bind_pattern_vars ptypes (add_binding name kind stack) rest
+        (* Check if this identifier is a known constructor - if so, emit it as such
+           and recursively process its arguments *)
+        (match Hashtbl.find_opt globals name with
+         | Some (Constructor ctor_params) ->
+             emit_token t (Constructor ctor_params);
+             (* Process the constructor's arguments *)
+             let (stack', rest') = bind_pattern_vars ~globals ctor_params stack rest in
+             (* Continue with remaining param_types *)
+             bind_pattern_vars ~globals ptypes stack' rest'
+         | Some kind ->
+             (* Known global but not a constructor - emit with its kind *)
+             emit_token t kind;
+             bind_pattern_vars ~globals ptypes stack rest
+         | None ->
+             (* Unknown - treat as pattern variable *)
+             let kind = if Type_expr.is_function_type ptype then Function else Variable in
+             emit_token t kind;
+             bind_pattern_vars ~globals ptypes (add_binding name kind stack) rest)
     
     | ({ Token.kind = IDENT name; _ } as t) :: rest, [] ->
-        emit_token t Variable;
-        bind_pattern_vars [] (add_binding name Variable stack) rest
+        (* No more expected params - check if it's a constructor anyway *)
+        (match Hashtbl.find_opt globals name with
+         | Some (Constructor ctor_params) ->
+             emit_token t (Constructor ctor_params);
+             bind_pattern_vars ~globals ctor_params stack rest
+         | Some kind ->
+             emit_token t kind;
+             bind_pattern_vars ~globals [] stack rest
+         | None ->
+             emit_token t Variable;
+             bind_pattern_vars ~globals [] (add_binding name Variable stack) rest)
     
     | _, _ -> (stack, tokens)
   in
@@ -193,7 +217,7 @@ let analyze ~(globals: (string, semantic_kind) Hashtbl.t) (tokens : token list) 
         (match Hashtbl.find_opt globals cname with
           | Some (Constructor params) ->
               emit_token t (Constructor params);
-              let (stack', rest') = bind_pattern_vars params stack rest in
+              let (stack', rest') = bind_pattern_vars ~globals params stack rest in
               loop stack' rest'
           | Some kind -> 
               emit_token t kind;

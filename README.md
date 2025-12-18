@@ -13,9 +13,7 @@ Static analysis. Two passes over the token stream:
 1. **Globals pass** - Find all top-level definitions, parse constructor types
 2. **Scope pass** - Walk the file tracking local bindings, emit semantic tokens
 
-It won't catch everything (notations, imports, and some edge cases need the kernel), but it handles what matters: definitions, types, constructors, and proper variable scoping including shadowing.
-
-Is this overkill? Probably. Did I write a type expression parser just to track constructor parameter types? Yes. Do I regret it? Not yet.
+For symbols not defined in the file (stdlib, imports), use `--query` to resolve them via [proof-archivist](https://gitlab.com/cogumbreiro/proof-archivist/).
 
 ## Quick start
 
@@ -23,8 +21,11 @@ Is this overkill? Probably. Did I write a type expression parser just to track c
 # Build
 dune build
 
-# Run
+# Run (static analysis only)
 dune exec coq_tokens -- yourfile.v
+
+# Run with stdlib symbol resolution
+dune exec coq_tokens -- --query yourfile.v
 
 # Or via make
 make run FILE=yourfile.v
@@ -63,6 +64,11 @@ Source (.v)
 └─────────┘  emits semantic tokens with resolved kinds
     │
     ▼
+┌─────────┐
+│ Query   │  (optional) resolves unknown symbols via proof-query
+└─────────┘
+    │
+    ▼
  Output
 ```
 
@@ -93,12 +99,35 @@ Was this necessary? No. But it bothered me.
 | Function | `plus`, `map`, `plus_O_n` |
 | Module | `Nat`, `List` |
 | Variable | params, let bindings, match bindings |
+| Ltac | `intros`, `reflexivity`, `rewrite` |
+
+## Optional: Resolving stdlib symbols
+
+By default, coq-tokens only knows about definitions in the current file. To resolve standard library symbols (like `nat`, `S`, `O`, `list`, etc.), use the `--query` flag:
+
+```bash
+dune exec coq_tokens -- --query yourfile.v
+```
+
+This requires [proof-archivist](https://gitlab.com/cogumbreiro/proof-archivist/) to be installed:
+
+```bash
+# Clone and build proof-archivist
+git clone https://gitlab.com/cogumbreiro/proof-archivist/
+cd proof-archivist
+opam install coq-lsp alcotest  # dependencies
+dune build
+dune install
+```
+
+The `--query` flag batches all unknown symbols into a single call to `proof-query locate`, making it fast even with many unknowns.
 
 ## Limitations
 
-This is static analysis, not a type checker. Some things we currently can't know:
+This is static analysis, not a type checker. Some things we can't know without `--query`:
 
-- Standard library types (would need `.glob` files or Fleche)
+- Standard library types and constructors
+- Symbols from imported modules
 - Notation-defined syntax
 - Anything requiring evaluation
 
@@ -109,6 +138,10 @@ This is static analysis, not a type checker. Some things we currently can't know
 - Contribute semantic tokens upstream to coq-lsp
 
 Or I'll get distracted by something else. We'll see.
+
+## Acknowledgments
+
+Symbol resolution via `--query` is powered by [proof-archivist](https://gitlab.com/cogumbreiro/proof-archivist/) by [Tiago Cogumbreiro](https://cogumbreiro.github.io/). The `proof-query locate` command provides fast, batched symbol lookup through coq-lsp's petanque interface.
 
 ## License
 
